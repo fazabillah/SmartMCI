@@ -569,7 +569,6 @@ Could you please ask about topics related to materials, corrosion, or equipment 
 - "How to prevent stress corrosion cracking?"
 - "Operating limits for high temperature service?"
 
-**Note:** I provide all temperature values in °C and pressure values in bar (metric SI units).
 """
         else:
             # Check cache first
