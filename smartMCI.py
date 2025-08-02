@@ -554,9 +554,6 @@ Could you please ask about topics related to materials, corrosion, or equipment 
         # Add user message
         st.session_state.chat_messages.append({"role": "user", "content": prompt})
         
-        with st.chat_message("user"):
-            st.markdown(prompt)
-        
         # Check if MCI-related
         if not is_mci_related(prompt):
             response = """I'm specialized in Materials, Corrosion, and Integrity (MCI) engineering based on API 571, 970, and 584 standards. 
@@ -581,16 +578,13 @@ Could you please ask about topics related to materials, corrosion, or equipment 
                 response = cached_response + "\n\n*[Cached response]*"
             else:
                 # Generate new response
-                with st.chat_message("assistant"):
-                    with st.spinner("Analyzing API standards..."):
-                        response = generate_response(prompt, vectorstores, llm, st.session_state.chat_messages)
-                        cache.set(prompt, response)
+                with st.spinner("Analyzing API standards..."):
+                    response = generate_response(prompt, vectorstores, llm, st.session_state.chat_messages)
+                    cache.set(prompt, response)
         
         # Add assistant response
         st.session_state.chat_messages.append({"role": "assistant", "content": response})
-        
-        with st.chat_message("assistant"):
-            st.markdown(response)
+        st.rerun()
     
     # Welcome message for new users
     if not st.session_state.chat_messages:
