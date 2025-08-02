@@ -52,6 +52,15 @@ ENVIRONMENTS = [
     "Chloride Environment", "Caustic Service", "Atmospheric"
 ]
 
+# Example questions for sidebar
+SMART_EXAMPLES = [
+    "What causes stress corrosion cracking?",
+    "How to prevent pitting corrosion?", 
+    "Material selection for offshore platforms",
+    "Welding considerations for sour service",
+    "Process safety in chemical plants"
+]
+
 # Simple caching system
 class SimpleCache:
     def __init__(self, ttl_hours=24):
@@ -145,7 +154,7 @@ def setup_llm():
     return ChatGroq(model_name="llama-3.1-8b-instant", temperature=0.1)
 
 def is_mci_related(query: str) -> bool:
-    """Check if query is related to materials, corrosion, or integrity"""
+    """Check if query is related to core MCI topics"""
     mci_keywords = [
         # Damage mechanisms
         'corrosion', 'cracking', 'damage', 'degradation', 'failure', 'pitting', 
@@ -168,6 +177,32 @@ def is_mci_related(query: str) -> bool:
     
     query_lower = query.lower()
     return any(keyword in query_lower for keyword in mci_keywords)
+
+def is_engineering_related(query: str) -> bool:
+    """Check if query is broadly engineering-related (more permissive than strict MCI)"""
+    engineering_keywords = [
+        # Core MCI terms
+        'corrosion', 'cracking', 'damage', 'degradation', 'failure', 'pitting', 
+        'crevice', 'stress', 'fatigue', 'erosion', 'embrittlement', 'oxidation',
+        'steel', 'stainless', 'carbon', 'alloy', 'metal', 'material', 'duplex',
+        'inconel', 'hastelloy', 'aluminum', 'copper', 'titanium',
+        'pipe', 'vessel', 'tank', 'exchanger', 'reactor', 'equipment', 'piping',
+        'pressure', 'storage', 'column', 'tower', 'pipeline',
+        'temperature', 'chloride', 'sour', 'h2s', 'caustic', 'marine', 'offshore',
+        'api 571', 'api 970', 'api 584', 'api571', 'api970', 'api584',
+        'mitigation', 'prevention', 'protection', 'inhibitor', 'coating',
+        'cathodic', 'inspection', 'monitoring', 'integrity', 'limits',
+        
+        # Broader engineering terms
+        'engineering', 'design', 'safety', 'standards', 'specification',
+        'welding', 'fabrication', 'construction', 'maintenance', 'testing',
+        'quality', 'reliability', 'performance', 'optimization', 'efficiency',
+        'process', 'manufacturing', 'industrial', 'chemical', 'mechanical',
+        'thermal', 'structural', 'analysis', 'modeling', 'simulation'
+    ]
+    
+    query_lower = query.lower()
+    return any(keyword in query_lower for keyword in engineering_keywords)
 
 def retrieve_documents(query: str, vectorstores: dict) -> List:
     """Retrieve relevant documents from all API sources"""
@@ -218,16 +253,19 @@ def get_conversation_context(chat_history: List[dict], max_messages: int = 4) ->
     
     return "\n".join(context_parts) if context_parts else ""
 
-def search_web_tavily(query: str, max_results: int = 5) -> str:
-    """Search web using Tavily API as fallback when API docs are insufficient"""
+def search_web_tavily(query: str, max_results: int = 5, is_mci: bool = True) -> str:
+    """Search web using Tavily API for MCI and engineering topics"""
     
     tavily_api_key = os.environ.get("TAVILY_API_KEY")
     if not tavily_api_key:
         return "Web search unavailable - TAVILY_API_KEY not configured."
     
     try:
-        # Focus search on MCI and engineering topics
-        focused_query = f"materials corrosion integrity engineering {query}"
+        # Focus search on engineering/MCI topics
+        if is_mci:
+            focused_query = f"materials corrosion integrity engineering {query}"
+        else:
+            focused_query = f"engineering industrial {query}"
         
         url = "https://api.tavily.com/search"
         payload = {
@@ -240,7 +278,8 @@ def search_web_tavily(query: str, max_results: int = 5) -> str:
             "include_domains": [
                 "asme.org", "api.org", "nace.org", "astm.org", 
                 "engineeringtoolbox.com", "corrosionpedia.com",
-                "sciencedirect.com", "springer.com", "onepetro.org"
+                "sciencedirect.com", "springer.com", "onepetro.org",
+                "ieee.org", "aiche.org", "isa.org"
             ]
         }
         
@@ -305,15 +344,34 @@ def assess_content_sufficiency(docs: List, query: str) -> Tuple[bool, str]:
     else:
         return False, f"API documentation limited (content: {total_content_length} chars, term overlap: {term_overlap:.2f})"
 
-def create_chat_prompt():
-    """Create conversational prompt template (backwards compatibility)"""
-    return create_hybrid_chat_prompt()
+def create_polite_redirect(query: str) -> str:
+    """Create a helpful redirect for non-engineering topics"""
+    return f"""I'm SmartMCI, specialized in Materials, Corrosion, and Integrity (MCI) engineering. While I'd love to help with "{query}", I'm designed to focus on engineering topics, particularly:
+
+**🛡️ Core Expertise:**
+- **Damage Mechanisms** (API 571) - Failure analysis, root causes
+- **Corrosion Control** (API 970) - Prevention, mitigation strategies  
+- **Integrity Management** (API 584) - Operating limits, safe windows
+
+**🔧 Related Engineering Topics:**
+- Materials selection and behavior
+- Process safety and reliability
+- Equipment design and maintenance
+- Industrial standards and codes
+
+**Try asking:**
+- "What causes stress corrosion cracking in chloride environments?"
+- "How to select materials for high temperature service?"
+- "Operating limits for sour gas systems?"
+- "Fatigue failure mechanisms in pressure vessels?"
+
+I'm here to help make your engineering projects safer and more reliable! 🚀"""
 
 def create_hybrid_chat_prompt():
-    """Create prompt template that can handle both API docs and web content"""
+    """Create prompt template optimized for MCI focus"""
     return PromptTemplate(
         input_variables=["api_context", "web_context", "conversation_history", "query", "search_used"],
-        template="""You are a specialized MCI (Materials, Corrosion, and Integrity) engineering assistant with expertise in API 571, API 970, and API 584 standards.
+        template="""You are SmartMCI, a specialized assistant for Materials, Corrosion, and Integrity (MCI) engineering with expertise in API 571, API 970, and API 584 standards.
 
 IMPORTANT UNIT REQUIREMENTS:
 - ALWAYS use metric SI units
@@ -331,16 +389,17 @@ Conversation History:
 Current Question: {query}
 
 RESPONSE GUIDELINES:
-1. Provide DIRECT, CONCISE answers without preambles
+1. Provide DIRECT, HELPFUL answers without preambles
 2. Do NOT mention "based on API documentation" or "web search results" 
-3. Start immediately with the technical information
+3. Start immediately with the information
 4. Use metric SI units consistently
-5. Reference sources naturally: "API 571 states..." or "Per API 970..."
+5. Reference API standards naturally: "API 571 states..." or "Per API 970..."
 6. Maintain conversational flow and acknowledge previous context
 7. If you have information from any source, present it confidently
 8. Be technically accurate and specific
+9. For engineering-related general questions, provide helpful context while steering toward MCI relevance
 
-Give a direct technical response:"""
+Response:"""
     )
 
 def create_analysis_prompt():
@@ -397,26 +456,37 @@ Analysis:"""
     )
 
 def generate_response(query: str, vectorstores: dict, llm, chat_history: List[dict] = None, equipment_context: dict = None) -> str:
-    """Generate response using RAG with web search fallback"""
+    """Generate response with MCI focus and smart boundaries"""
     try:
-        # Retrieve relevant documents from API sources
-        docs = retrieve_documents(query, vectorstores)
-        api_context = format_documents(docs)
+        # Check if query is MCI or engineering-related
+        is_mci = is_mci_related(query)
+        is_engineering = is_engineering_related(query)
         
-        # Assess if API documentation is sufficient
-        is_sufficient, assessment_msg = assess_content_sufficiency(docs, query)
+        # Always retrieve API documents for engineering questions
+        docs = retrieve_documents(query, vectorstores) if is_engineering else []
+        api_context = format_documents(docs)
         
         web_context = ""
         search_used = ""
         
-        # Use web search as fallback if API docs are insufficient
-        if not is_sufficient and is_mci_related(query):
-            st.info(f"🔍 API documentation limited. Searching web for additional information... ({assessment_msg})")
-            web_context = search_web_tavily(query)
+        if is_mci:
+            # Core MCI topics - full treatment
+            is_sufficient, assessment_msg = assess_content_sufficiency(docs, query)
+            if not is_sufficient:
+                st.info(f"🔍 Searching for additional MCI information...")
+                web_context = search_web_tavily(query, is_mci=True)
+                search_used = "✅ "
+        elif is_engineering:
+            # Engineering-related but not core MCI - web search with MCI context
+            st.info("🔍 Searching for engineering information...")
+            web_context = search_web_tavily(query, is_mci=True)  # Still use MCI-focused search
             search_used = "✅ "
+        else:
+            # Non-engineering topics - polite redirect
+            return create_polite_redirect(query)
         
         if equipment_context:
-            # Structured analysis mode (keep original logic)
+            # Structured analysis mode
             context_parts = []
             for key, value in equipment_context.items():
                 if value and value != "Not Specified":
@@ -431,7 +501,7 @@ def generate_response(query: str, vectorstores: dict, llm, chat_history: List[di
                 query=query
             )
         else:
-            # Chat mode with hybrid sources
+            # Chat mode
             conversation_context = get_conversation_context(chat_history or [])
             
             prompt_template = create_hybrid_chat_prompt()
@@ -451,9 +521,11 @@ def generate_response(query: str, vectorstores: dict, llm, chat_history: List[di
         else:
             result = str(response)
         
-        # Add search indicator to response if web search was used
-        if web_context and search_used:
-            result += "\n\n*📡 Response includes web search results to supplement API documentation*"
+        # Add helpful footer for non-core MCI topics
+        if is_engineering and not is_mci:
+            result += "\n\n💡 *For specific materials, corrosion, or integrity challenges, feel free to ask about API 571/970/584 standards.*"
+        elif web_context and search_used:
+            result += "\n\n*📡 Enhanced with web search results*"
         
         return result
             
@@ -461,9 +533,9 @@ def generate_response(query: str, vectorstores: dict, llm, chat_history: List[di
         return f"I encountered an error while processing your request: {str(e)}. Please try again."
 
 def chatbot_page():
-    """Chatbot page implementation"""
+    """Chatbot page implementation with optimized MCI focus"""
     st.title("🛡️ SmartMCI ChatBot")
-    st.markdown("**Conversational AI for Materials, Corrosion & Integrity**")
+    st.markdown("**Expert MCI Engineering Consultant**")
     
     # Initialize session state for chatbot
     if "chat_messages" not in st.session_state:
@@ -499,41 +571,19 @@ def chatbot_page():
         st.markdown("---")
         st.markdown("### 💡 Example Questions")
         
-        examples = [
-            "What causes stress corrosion cracking?",
-            "How to prevent pitting corrosion?",
-            "Operating limits for sour service?",
-            "Damage mechanisms in stainless steel",
-            "Corrosion control methods for offshore"
-        ]
-        
-        for example in examples:
+        for example in SMART_EXAMPLES:
             if st.button(example, key=f"chat_ex_{hash(example)}", use_container_width=True):
                 # Add user message
                 st.session_state.chat_messages.append({"role": "user", "content": example})
                 
-                # Process the example question through AI
-                if is_mci_related(example):
-                    # Check cache first
-                    cached_response = cache.get(example)
-                    if cached_response:
-                        response = cached_response + "\n\n*[Cached response]*"
-                    else:
-                        # Generate new response
-                        response = generate_response(example, vectorstores, llm, st.session_state.chat_messages)
-                        cache.set(example, response)
+                # Check cache first
+                cached_response = cache.get(example)
+                if cached_response:
+                    response = cached_response + "\n\n*[Cached response]*"
                 else:
-                    response = """I'm specialized in Materials, Corrosion, and Integrity (MCI) engineering based on API 571, 970, and 584 standards. 
-
-Your question doesn't appear to be related to:
-- Damage mechanisms and failure analysis
-- Corrosion control and prevention
-- Integrity operating windows
-- Materials selection and behavior
-
-Could you please ask about topics related to materials, corrosion, or equipment integrity?
-
-"""
+                    # Generate response with smart boundaries
+                    response = generate_response(example, vectorstores, llm, st.session_state.chat_messages)
+                    cache.set(example, response)
                 
                 # Add assistant response
                 st.session_state.chat_messages.append({"role": "assistant", "content": response})
@@ -549,37 +599,20 @@ Could you please ask about topics related to materials, corrosion, or equipment 
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
     
-    # Chat input
-    if prompt := st.chat_input("Ask about materials, corrosion, or integrity..."):
+    # Chat input with smart boundaries
+    if prompt := st.chat_input("Ask about materials, corrosion, integrity, or engineering..."):
         # Add user message
         st.session_state.chat_messages.append({"role": "user", "content": prompt})
         
-        # Check if MCI-related
-        if not is_mci_related(prompt):
-            response = """I'm specialized in Materials, Corrosion, and Integrity (MCI) engineering based on API 571, 970, and 584 standards. 
-
-Your question doesn't appear to be related to:
-- Damage mechanisms and failure analysis
-- Corrosion control and prevention
-- Integrity operating windows
-- Materials selection and behavior
-
-Could you please ask about topics related to materials, corrosion, or equipment integrity? For example:
-- "What causes pitting corrosion?"
-- "How to prevent stress corrosion cracking?"
-- "Operating limits for high temperature service?"
-
-"""
+        # Check cache first
+        cached_response = cache.get(prompt)
+        if cached_response:
+            response = cached_response + "\n\n*[Cached response]*"
         else:
-            # Check cache first
-            cached_response = cache.get(prompt)
-            if cached_response:
-                response = cached_response + "\n\n*[Cached response]*"
-            else:
-                # Generate new response
-                with st.spinner("Analyzing API standards..."):
-                    response = generate_response(prompt, vectorstores, llm, st.session_state.chat_messages)
-                    cache.set(prompt, response)
+            # Generate response with smart boundaries
+            with st.spinner("Analyzing..."):
+                response = generate_response(prompt, vectorstores, llm, st.session_state.chat_messages)
+                cache.set(prompt, response)
         
         # Add assistant response
         st.session_state.chat_messages.append({"role": "assistant", "content": response})
@@ -588,28 +621,29 @@ Could you please ask about topics related to materials, corrosion, or equipment 
     # Welcome message for new users
     if not st.session_state.chat_messages:
         st.markdown("""
-        ## 👋 Welcome to SmartMCI ChatBot!
-        
-        I'm your conversational consultant for **Materials, Corrosion & Integrity** based on:
+        ## 👋 Welcome to SmartMCI!
+
+        I'm your expert consultant for **Materials, Corrosion & Integrity** engineering:
+
+        **🛡️ Core Expertise:**
         - **API 571** - Damage Mechanisms & Failure Analysis
         - **API 970** - Corrosion Control & Prevention  
         - **API 584** - Integrity Operating Windows
-        
+
+        **🔧 Engineering Support:**
+        - Materials selection and behavior
+        - Process safety and equipment reliability
+        - Industrial standards and best practices
+        - Design optimization for harsh environments
+
         **Enhanced Capabilities:**
-        - 📚 **Primary Source**: API standards documentation
-        - 🌐 **Web Search**: Additional information when API docs are limited
-        - 💬 **Conversational**: Natural chat with context awareness
-        
-        **Ask me about:**
-        - Damage mechanisms and their causes
-        - Corrosion prevention strategies
-        - Material selection guidance
-        - Operating limits and safe parameters
-        - Equipment integrity challenges
-        
-        **Units:** All responses use metric SI units
-        
-        **Try asking:** *"What causes stress corrosion cracking in chloride environments?"*
+        - 📚 **API Standards**: Comprehensive coverage of 571/970/584
+        - 🌐 **Web Search**: Latest engineering research and practices
+        - 💬 **Conversational**: Context-aware technical discussions
+
+        **I excel at engineering topics and can help with broader technical questions while steering toward MCI best practices.**
+
+        **Try asking:** *"What are the key factors in material selection for offshore platforms?"*
         """)
 
 def analysis_page():
