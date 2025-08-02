@@ -625,7 +625,7 @@ def chatbot_page():
 
         I'm your expert consultant for **Materials, Corrosion & Integrity** engineering:
 
-        **🛡️ Core Expertise:**
+        **🛡️ Core Expertise on American Petroleum Institue (API) Standard for:**
         - **API 571** - Damage Mechanisms & Failure Analysis
         - **API 970** - Corrosion Control & Prevention  
         - **API 584** - Integrity Operating Windows
@@ -636,12 +636,10 @@ def chatbot_page():
         - Industrial standards and best practices
         - Design optimization for harsh environments
 
-        **Enhanced Capabilities:**
+        **Features:**
         - 📚 **API Standards**: Comprehensive coverage of 571/970/584
         - 🌐 **Web Search**: Latest engineering research and practices
         - 💬 **Conversational**: Context-aware technical discussions
-
-        **I excel at engineering topics and can help with broader technical questions while steering toward MCI best practices.**
 
         **Try asking:** *"What are the key factors in material selection for offshore platforms?"*
         """)
