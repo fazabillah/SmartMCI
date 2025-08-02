@@ -1,0 +1,16 @@
+streamlit
+langchain
+langchain-groq
+langchain-huggingface
+langchain-pinecone
+pinecone-client
+sentence-transformers
+PyPDF2
+python-dotenv
+pandas
+numpy
+
+unstructured[pdf]
+pytesseract
+pdf2image
+Pillow
