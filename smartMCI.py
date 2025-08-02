@@ -331,24 +331,23 @@ Conversation History:
 Current Question: {query}
 
 RESPONSE GUIDELINES:
-1. Be CONCISE and avoid repetition
-2. Prioritize API 571/970/584 information when available
-3. If web sources provide relevant information, use it directly - don't claim you "couldn't find" information
-4. Be logical: If you cite web sources, you obviously found relevant information
-5. Reference sources clearly: "According to API 571, Page XX..." or "Based on web sources..."
+1. Provide DIRECT, CONCISE answers without preambles
+2. Do NOT mention "based on API documentation" or "web search results" 
+3. Start immediately with the technical information
+4. Use metric SI units consistently
+5. Reference sources naturally: "API 571 states..." or "Per API 970..."
 6. Maintain conversational flow and acknowledge previous context
-7. Use metric SI units consistently
-8. Do NOT contradict yourself about finding/not finding information
-9. If truly no relevant information exists, state this briefly without providing contradictory content
+7. If you have information from any source, present it confidently
+8. Be technically accurate and specific
 
-Provide a direct, technical response. If you have information from any source, present it confidently without claiming inability to find information:"""
+Give a direct technical response:"""
     )
 
 def create_analysis_prompt():
     """Create structured analysis prompt template"""
     return PromptTemplate(
         input_variables=["context", "equipment_context", "query"],
-        template="""You are an expert MCI (Materials, Corrosion, and Integrity) engineering consultant providing structured analysis based on API 571, API 970, and API 584 standards.
+        template="""You are an expert MCI (Materials, Corrosion, and Integrity) engineering consultant providing structured analysis.
 
 Equipment Context:
 {equipment_context}
@@ -367,20 +366,20 @@ Analysis Request: {query}
 
 Provide a comprehensive structured analysis covering:
 
-## 1. DAMAGE MECHANISMS (API 571)
+## 1. DAMAGE MECHANISMS
 - Specific conditions that cause damage
 - Environmental factors and thresholds
 - Material susceptibility factors
 - Critical parameters (temperature in °C, pressure in bar)
 
-## 2. MITIGATION STRATEGIES (API 970)
+## 2. MITIGATION STRATEGIES
 - Material selection recommendations
 - Environmental control measures
 - Protective systems and coatings
 - Design modifications
 - Process optimization strategies
 
-## 3. OPERATING LIMITS (API 584)
+## 3. OPERATING LIMITS
 - Safe operating windows (temperature in °C, pressure in bar)
 - Critical control points and alarm settings
 - Monitoring requirements
@@ -392,12 +391,7 @@ Provide a comprehensive structured analysis covering:
 - Risk assessment considerations
 - Implementation priorities
 
-IMPORTANT: 
-- Base analysis ONLY on the provided API documentation
-- If specific information is not available in the documentation, clearly state this
-- Include API source references (e.g., "API 571, Page XX")
-- Express all temperatures in °C and pressures in bar
-- Be thorough but concise in each section
+Express all temperatures in °C and pressures in bar. Be thorough but concise in each section.
 
 Analysis:"""
     )
